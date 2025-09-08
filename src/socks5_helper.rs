@@ -68,7 +68,7 @@ pub async fn handle_socks5(mut inbound: TcpStream) -> anyhow::Result<(TcpStream,
         _ => anyhow::bail!("Unknown ATYP"),
     }
 
-    LOG::info!("received SOCKS5 CONNECT {}", addr);
+    // LOG::debug!("received SOCKS5 CONNECT {}:{}", addr, port);
     // Successful response
     let resp = [
         0x05u8, 0x00, 0x00, 0x01, // VER, REP, RSV, ATYP=IPv4

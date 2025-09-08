@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use native_tls::TlsConnector as NativeTlsConnector;
-use proxy_rs::json_reader::Config;
+use proxy_rs::json_reader::{Config, ServerInfo};
 use proxy_rs::trojan_util::TrojanUtil;
 use proxy_rs::{json_reader, socks5_helper};
 use std::net::{Ipv4Addr, Ipv6Addr};
@@ -14,7 +14,21 @@ use tracing as LOG;
 
 async fn handle_client(client_stream: TcpStream) -> Result<()> {
     let (inbound, target, tport) = socks5_helper::handle_socks5(client_stream).await?;
-    transfer_to_trojan(inbound, &target, tport).await
+    LOG::info!("received SOCKS5 CONNECT {}:{}", target, tport);
+    
+    let config = get_config().await;
+
+    let index: u16 = if ["chatgpt.com", "openai.com"].iter().any(|d| target.ends_with(d)) {
+        config.select[1]
+    } else {
+        config.select[0]
+    };
+
+    let info = config
+        .list
+        .get(index as usize - 1)
+        .ok_or_else(|| anyhow::anyhow!("Index {} out of bounds", index))?;
+    transfer_to_trojan(inbound, &target, tport, info).await
 }
 
 static CONFIG: OnceCell<Arc<Config>> = OnceCell::const_new();
@@ -23,37 +37,33 @@ async fn get_config() -> Arc<Config> {
         .get_or_init(|| async {
             let config: Config =
                 json_reader::load_json("proxy.cache.json").expect("failed to load config");
-            let index = config.select[0];
-            let conf = config
-                .list
-                .get(index as usize - 1)
-                .ok_or_else(|| anyhow::anyhow!("Index {} out of bounds", index))
-                .expect("index out of bounds");
-            if !conf.scheme.eq_ignore_ascii_case("trojan") {
-                anyhow::anyhow!("server index check failed");
+            // check
+            for index in &config.select {
+                let conf = config
+                    .list
+                    .get(*index as usize - 1)
+                    .ok_or_else(|| anyhow::anyhow!("Index {} out of bounds", *index))
+                    .expect("index out of bounds");
+                if !conf.scheme.eq_ignore_ascii_case("trojan") {
+                    anyhow::anyhow!("server index check failed");
+                }
+                if conf.index != *index {
+                    anyhow::anyhow!("server index check failed");
+                }
+                LOG::info!("** Usage trojan server[{}] {} **", *index, conf.name);
             }
-            if conf.index != index {
-                anyhow::anyhow!("server index check failed");
-            }
-            LOG::info!("** Usage trojan server {} **", conf.name);
             Arc::new(config)
         })
         .await
         .clone()
 }
 
-async fn transfer_to_trojan(mut inbound: TcpStream, target_addr: &str, tport: u16) -> Result<()> {
-    let config = get_config().await;
-    let index = config.select[0];
-    let conf = config
-        .list
-        .get(index as usize - 1)
-        .ok_or_else(|| anyhow::anyhow!("Index {} out of bounds", index))?;
-    let mut tls = TrojanUtil::create_connection(conf).await?;
+async fn transfer_to_trojan(mut inbound: TcpStream, target_addr: &str, tport: u16, info: &ServerInfo) -> Result<()> {
+    let mut tls = TrojanUtil::create_connection(info).await?;
 
     // 1. Connect to the Trojan server
     let (host, port_u16) =
-        TrojanUtil::send_trojan_request(conf.key.as_str(), &mut tls, target_addr, tport).await?;
+        TrojanUtil::send_trojan_request(info.key.as_str(), &mut tls, target_addr, tport).await?;
 
     // 2. Bidirectional data forwarding
     let (from_client, from_server) = io::copy_bidirectional(&mut inbound, &mut tls)
@@ -61,7 +71,7 @@ async fn transfer_to_trojan(mut inbound: TcpStream, target_addr: &str, tport: u1
         .context(format!("Transfer failed, host {}:{}", host, port_u16))?;
 
     LOG::info!(
-        "Trojan proxy: host={}, port={}, ransferred {} bytes from client, {} bytes from server",
+        "trojan accepted tcp:{}:{} [socks > proxy], transferred {} bytes from client, {} bytes from server",
         host,
         port_u16,
         from_client,
