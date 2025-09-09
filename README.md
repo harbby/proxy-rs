@@ -1,9 +1,9 @@
 ## trojan proxy simple
 
 ### support Protocol:
-* socks (verified)
-* http (missing)
-* https (missing)
+* socks5 (verified)
+* http (verified)
+* https (not support)
 
 ### os:
 * Linux (verified)

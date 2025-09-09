@@ -19,23 +19,18 @@ async fn transfer(mut inbound: TcpStream, addr: &str) -> Result<()> {
         }
     };
 
-    //io::copy_bidirectional(&mut inbound, &mut outbound).await?;
-
-    let (mut ri, mut wi) = inbound.into_split();
-    let (mut ro, mut wo) = outbound.into_split();
-
-
-    let client_to_server = tokio::spawn(async move {
-        io::copy(&mut ri, &mut wo).await?;
-        wo.shutdown().await
-    });
-
-    let server_to_client = tokio::spawn(async move {
-        io::copy(&mut ro, &mut wi).await?;
-        wi.shutdown().await
-    });
-
-    let _ = tokio::try_join!(client_to_server, server_to_client)?;
+    io::copy_bidirectional(&mut inbound, &mut outbound).await?;
+    // let (mut ri, mut wi) = inbound.into_split();
+    // let (mut ro, mut wo) = outbound.into_split();
+    // let client_to_server = tokio::spawn(async move {
+    //     io::copy(&mut ri, &mut wo).await?;
+    //     wo.shutdown().await
+    // });
+    // let server_to_client = tokio::spawn(async move {
+    //     io::copy(&mut ro, &mut wi).await?;
+    //     wi.shutdown().await
+    // });
+    // let _ = tokio::try_join!(client_to_server, server_to_client)?;
     Ok(())
 }
 

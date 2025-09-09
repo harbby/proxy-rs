@@ -10,8 +10,8 @@ use native_tls::TlsConnector as NativeTlsConnector;
 use tokio::io::AsyncWriteExt;
 use anyhow::Result;
 use sha2::{Sha224, Digest};
-use crate::json_reader;
-use crate::json_reader::{Config, ServerInfo};
+use crate::settings;
+use crate::settings::{Config, ServerInfo};
 
 /// Trojan Protocol:
 ///
@@ -60,7 +60,7 @@ pub struct TrojanUtil {
 impl TrojanUtil {
 
     // Safely split "host:port" (including IPv6 [::1]:443) into (host, port)
-    fn split_host_port(addr: &str) -> Result<(String, u16)> {
+    pub fn split_host_port(addr: &str) -> Result<(String, u16)> {
         if let Some(host_end) = addr.rfind(']') {
             // Such as [2001:db8::1]:443
             let host_start = addr.find('[').ok_or_else(|| anyhow::anyhow!("invalid IPv6 bracket"))?;
