@@ -1,15 +1,9 @@
 use anyhow::{Context, Result};
-use native_tls::TlsConnector as NativeTlsConnector;
-use proxy_rs::settings::{Config, ServerInfo};
+use proxy_rs::settings::{ServerInfo};
 use proxy_rs::trojan_util::TrojanUtil;
 use proxy_rs::{http_helper, settings, socks5_helper};
-use std::net::{Ipv4Addr, Ipv6Addr};
-use std::sync::{Arc, OnceLock};
 use tokio::io;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{futures, OnceCell};
-use tokio_native_tls::{TlsConnector, TlsStream};
 use tracing as LOG;
 
 async fn handle_http(client_stream: TcpStream) -> Result<()> {
@@ -32,7 +26,7 @@ async fn transfer_to_trojan(
     tport: u16,
     mode: &str,
 ) -> Result<()> {
-    let info: &ServerInfo = settings::get_trojan_server(target_addr).await?;
+    let info: &ServerInfo = settings::get_trojan_server(target_addr)?;
     let mut tls = TrojanUtil::create_connection(info).await?;
 
     // 1. Connect to the Trojan server

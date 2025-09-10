@@ -1,5 +1,5 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::{TcpStream};
 use tracing as LOG;
 
 pub async fn handle_socks5(mut inbound: TcpStream) -> anyhow::Result<(TcpStream, String, u16)> {

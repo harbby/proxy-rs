@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [[bin]]
-name = "simple_tcp_proxy"
+name = "mini_tcp_proxy"
 [[bin]]
-name = "backend_proxy"
+name = "direct_proxy"
 
 [dependencies]
 tokio = { version = "1.47.1", features = ["rt", "net", "rt-multi-thread", "macros", "sync", "io-util"] }

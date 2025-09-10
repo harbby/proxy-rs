@@ -11,7 +11,7 @@ pub async fn handle_http(mut inbound: TcpStream) -> anyhow::Result<(TcpStream, S
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or("").to_string();
     let uri = parts.next().unwrap_or("").to_string();
-    let version = parts.next().unwrap_or("").to_string();
+    // let version = parts.next().unwrap_or("").to_string();
     if method != "CONNECT" {
         anyhow::bail!("Wrong HTTP method: {}", method);
     }
@@ -35,7 +35,7 @@ pub async fn handle_http(mut inbound: TcpStream) -> anyhow::Result<(TcpStream, S
     Ok((inbound, host, port))
 }
 
-pub async fn handle_http_https(mut inbound: TcpStream) -> anyhow::Result<(TcpStream, String, u16)> {
+pub async fn handle_http_https(inbound: TcpStream) -> anyhow::Result<(TcpStream, String, u16)> {
     // peek 前 1k 字节不消费流
     let mut buf = [0u8; 1];
     let n = inbound.peek(&mut buf).await?;

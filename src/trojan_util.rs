@@ -1,7 +1,4 @@
-use std::collections::VecDeque;
 use std::net::{Ipv4Addr, Ipv6Addr};
-use std::sync::Arc;
-use tokio::sync::{Mutex, Semaphore};
 use tokio_native_tls::TlsStream;
 use tokio::net::TcpStream;
 use tracing as LOG;
@@ -10,8 +7,7 @@ use native_tls::TlsConnector as NativeTlsConnector;
 use tokio::io::AsyncWriteExt;
 use anyhow::Result;
 use sha2::{Sha224, Digest};
-use crate::settings;
-use crate::settings::{Config, ServerInfo};
+use crate::settings::{ServerInfo};
 
 /// Trojan Protocol:
 ///

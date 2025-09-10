@@ -3,9 +3,8 @@ use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::BufReader;
-use std::sync::{Arc, LazyLock};
+use std::sync::{LazyLock};
 use anyhow::{Result};
-use tokio::sync::OnceCell;
 use tracing as LOG;
 
 static SERVER_LIST_FILE:&str = "trojan_servers.json";
@@ -46,7 +45,7 @@ static CORE_CONFIG: LazyLock<CoreConfig> = LazyLock::new(|| {
 });
 
 #[derive(Debug, Deserialize)]
-pub struct Config {
+struct Config {
     pub list: Vec<ServerInfo>,
     #[serde(default = "default_scheme")]
     pub subscription: String,
@@ -95,7 +94,7 @@ fn select_index(target_addr: &str) -> u16 {
     *config.select.get(index as usize).expect("")
 }
 
-pub async fn get_trojan_server(target_addr: &str) -> Result<&'static ServerInfo> {
+pub fn get_trojan_server(target_addr: &str) -> Result<&'static ServerInfo> {
     let index: u16 = select_index(target_addr);
     let info = &SERVER_LIST_CONFIG
         .list
