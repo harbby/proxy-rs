@@ -10,11 +10,11 @@ pub async fn handle_http(mut inbound: TcpStream) -> anyhow::Result<(TcpStream, S
     buf_reader.read_line(&mut request_line).await?;
     let mut parts = request_line.split_whitespace();
     let method = parts.next().unwrap_or("").to_string();
-    let uri = parts.next().unwrap_or("").to_string();
     // let version = parts.next().unwrap_or("").to_string();
     if method != "CONNECT" {
         anyhow::bail!("Wrong HTTP method: {}", method);
     }
+    let addr = parts.next().expect("not found target addr").to_string();
 
     // let mut headers = Vec::new();
     loop {
@@ -31,22 +31,6 @@ pub async fn handle_http(mut inbound: TcpStream) -> anyhow::Result<(TcpStream, S
 
     inbound.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n").await?;
     inbound.flush().await?;
-    let (host, port) = TrojanUtil::split_host_port(uri.as_str())?;
+    let (host, port) = TrojanUtil::split_host_port(addr.as_str())?;
     Ok((inbound, host, port))
-}
-
-pub async fn handle_http_https(inbound: TcpStream) -> anyhow::Result<(TcpStream, String, u16)> {
-    // peek 前 1k 字节不消费流
-    let mut buf = [0u8; 1];
-    let n = inbound.peek(&mut buf).await?;
-    if n == 0 {
-        anyhow::bail!("Connection closed");
-    }
-    // 1️⃣ 判断首字节是否 TLS Handshake
-    if buf[0] != 22 {
-        return handle_http(inbound).await;
-    }
-
-    // TLS/HTTPS，直接拒绝
-    anyhow::bail!("Not supported by HTTPS, TLS handshake detected, rejecting connection");
 }

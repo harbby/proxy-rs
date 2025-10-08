@@ -17,6 +17,8 @@ pub struct CoreConfig {
     pub select: Vec<u16>,
     pub special_domains: HashMap<String, u16>,
     pub default_backend: u16,
+    #[serde(default = "default_vec_str")]
+    pub no_proxy: Vec<String>,
 }
 
 static SERVER_LIST_CONFIG: LazyLock<Config> = LazyLock::new(|| {
@@ -28,7 +30,7 @@ static CORE_CONFIG: LazyLock<CoreConfig> = LazyLock::new(|| {
     let config:CoreConfig = load_json(CORE_CONFIG_FILE).expect("failed to load config");
     // check
     for index in &config.select {
-        let conf = &SERVER_LIST_CONFIG
+        let conf = *&SERVER_LIST_CONFIG
             .list
             .get(*index as usize - 1)
             .ok_or_else(|| anyhow::anyhow!("Index {} out of bounds", *index))
@@ -72,6 +74,10 @@ fn default_scheme() -> String {
     "".to_string()
 }
 
+fn default_vec_str() -> Vec<String> {
+    Vec::with_capacity(0)
+}
+
 pub fn load_json<T: DeserializeOwned>(path: &str) -> Result<T> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
@@ -96,7 +102,7 @@ fn select_index(target_addr: &str) -> u16 {
 
 pub fn get_trojan_server(target_addr: &str) -> Result<&'static ServerInfo> {
     let index: u16 = select_index(target_addr);
-    let info = &SERVER_LIST_CONFIG
+    let info = &*SERVER_LIST_CONFIG
         .list
         .get(index as usize - 1)
         .ok_or_else(|| anyhow::anyhow!("Index {} out of bounds", index))?;

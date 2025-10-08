@@ -1,47 +1,76 @@
 use anyhow::{Context, Result};
-use proxy_rs::settings::{ServerInfo};
+use proxy_rs::settings::ServerInfo;
 use proxy_rs::trojan_util::TrojanUtil;
 use proxy_rs::{http_helper, settings, socks5_helper};
 use tokio::io;
+use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
 use tracing as LOG;
+use proxy_rs::router::is_no_proxy;
 
-async fn handle_http(client_stream: TcpStream) -> Result<()> {
-    let (inbound, target, tport) = http_helper::handle_http_https(client_stream).await?;
-    LOG::info!("received http CONNECT {}:{}", target, tport);
-
-    transfer_to_trojan(inbound, &target, tport, "http").await
+async fn handle_http(inbound: TcpStream) -> Result<()> {
+    let mut buf = [0u8; 1];
+    let n = inbound.peek(&mut buf).await?;
+    if n == 0 {
+        // Empty request
+        return Ok(())
+    }
+    // 1 判断首字节是否 TLS Handshake
+    if buf[0] == 22 {
+        anyhow::bail!("Not supported by HTTPS, TLS handshake detected, rejecting connection");
+    }
+    let (inbound, target, port) = http_helper::handle_http(inbound).await?;
+    // LOG::info!("received http CONNECT {}:{}", target, tport);
+    transfer(inbound, &target, port, "http").await
 }
 
-async fn handle_socks(client_stream: TcpStream) -> Result<()> {
-    let (inbound, target, tport) = socks5_helper::handle_socks5(client_stream).await?;
-    LOG::info!("received SOCKS5 CONNECT {}:{}", target, tport);
+async fn handle_socks(mut client_stream: TcpStream) -> Result<()> {
+    // ========== Handshake Phase ==========
+    let mut buf = [0u8; 2];
+    let n = client_stream.read(&mut buf).await?;
+    if n < 2 || buf[0] != 0x05 {
+        // Empty request
+        return Ok(())
+    }
 
-    transfer_to_trojan(inbound, &target, tport, "socks").await
+    let (inbound, target, port) = socks5_helper::handle_socks5(client_stream, buf[1]).await?;
+    // LOG::info!("received SOCKS5 CONNECT {}:{}", target, tport);
+    transfer(inbound, &target, port, "socks").await
 }
 
-async fn transfer_to_trojan(
+async fn transfer(
     mut inbound: TcpStream,
     target_addr: &str,
-    tport: u16,
+    port: u16,
     mode: &str,
 ) -> Result<()> {
-    let info: &ServerInfo = settings::get_trojan_server(target_addr)?;
-    let mut tls = TrojanUtil::create_connection(info).await?;
+    let mut proxy_mode = "proxy";
+    let (from_client, from_server) = if is_no_proxy(target_addr) {
+        proxy_mode = "direct";
+        let mut outbound = TcpStream::connect(format!("{target_addr}:{port}")).await
+            .context(format!("Failed accepted tcp:{target_addr}:{port} [{mode} > {proxy_mode}]"))?;
+        io::copy_bidirectional(&mut inbound, &mut outbound).await?
+    } else {
+        let info: &ServerInfo = settings::get_trojan_server(target_addr)?;
+        let mut tls = TrojanUtil::create_connection(info).await
+            .context(format!("Failed accepted trojan server [{}]{}", info.index, info.name))?;
 
-    // 1. Connect to the Trojan server
-    let (host, port_u16) =
-        TrojanUtil::send_trojan_request(info.key.as_str(), &mut tls, target_addr, tport).await?;
+        // 1. Connect to the Trojan server
+        TrojanUtil::send_trojan_request(info.key.as_str(), &mut tls, target_addr, port).await?;
 
-    // 2. Bidirectional data forwarding
-    let (from_client, from_server) = io::copy_bidirectional(&mut inbound, &mut tls)
-        .await
-        .context(format!("Transfer failed, host {}:{}", host, port_u16))?;
+        // 2. Bidirectional data forwarding
+        io::copy_bidirectional(&mut inbound, &mut tls)
+            .await
+            .context(format!(
+                "trojan transfer failed, tcp:{}:{} [{mode} > {proxy_mode}]",
+                target_addr, port
+            ))?
+    };
 
     LOG::info!(
-        "trojan accepted tcp:{}:{} [{mode} > proxy], transferred {} bytes from client, {} bytes from server",
-        host,
-        port_u16,
+        "accepted tcp:{}:{} [{mode} > {proxy_mode}], uplink:{} downlink:{} bytes",
+        target_addr,
+        port,
         from_client,
         from_server
     );
@@ -62,7 +91,7 @@ async fn main() -> Result<()> {
                 Ok((inbound, _)) => {
                     tokio::spawn(async move {
                         if let Err(e) = handle_socks(inbound).await {
-                            LOG::error!("Error on {}: {}", socks_addr, e);
+                            LOG::error!("{}", e);
                         }
                     });
                 }
@@ -79,7 +108,7 @@ async fn main() -> Result<()> {
                 Ok((inbound, _)) => {
                     tokio::spawn(async move {
                         if let Err(e) = handle_http(inbound).await {
-                            LOG::error!("Error on {}: {}", http_addr, e);
+                            LOG::error!("{}", e);
                         }
                     });
                 }

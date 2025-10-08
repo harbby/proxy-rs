@@ -2,16 +2,15 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream};
 use tracing as LOG;
 
-pub async fn handle_socks5(mut inbound: TcpStream) -> anyhow::Result<(TcpStream, String, u16)> {
-    let mut buf = [0u8; 2];
-    // ========== Handshake Phase ==========
-    let n = inbound.read(&mut buf).await?;
-    if n < 2 || buf[0] != 0x05 {
-        anyhow::bail!("Not a SOCKS5 request");
-    }
-
-    let nmethods = buf[1] as usize;
-    let mut methods = vec![0u8; nmethods];
+pub async fn handle_socks5(mut inbound: TcpStream, nmethods: u8) -> anyhow::Result<(TcpStream, String, u16)> {
+    // let mut buf = [0u8; 2];
+    // // ========== Handshake Phase ==========
+    // let n = inbound.read(&mut buf).await?;
+    // if n < 2 || buf[0] != 0x05 {
+    //     anyhow::bail!("Not a SOCKS5 request");
+    // }
+    // let nmethods = buf[1] as usize;
+    let mut methods = vec![0u8; nmethods as usize];
     inbound.read_exact(&mut methods).await?;
     if !methods.contains(&0x00) {
         anyhow::bail!("No supported auth method");

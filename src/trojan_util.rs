@@ -69,7 +69,7 @@ impl TrojanUtil {
         Ok((h.to_string(), p.parse::<u16>()?))
     }
 
-    pub async fn create_connection(conf: &ServerInfo) -> Result<(TlsStream<TcpStream>)> {
+    pub async fn create_connection(conf: &ServerInfo) -> Result<TlsStream<TcpStream>> {
         let trojan_addr = format!("{}:{}", conf.host, conf.port);
         let tcp = TcpStream::connect(trojan_addr).await?;
         let connector = NativeTlsConnector::builder().build()?;
@@ -79,7 +79,7 @@ impl TrojanUtil {
         Ok(tls)
     }
 
-    pub async fn send_trojan_request(password: &str, tls: &mut TlsStream<TcpStream>, target_addr:&str, port_u16: u16) -> Result<(String, u16)> {
+    pub async fn send_trojan_request(password: &str, tls: &mut TlsStream<TcpStream>, target_addr:&str, port_u16: u16) -> Result<()> {
         let mut req = Vec::new();
         let mut hasher = Sha224::new();
         hasher.update(password.as_bytes());
@@ -123,6 +123,6 @@ impl TrojanUtil {
         tls.write_all(&req).await?;
         tls.flush().await?;
         // LOG::info!("Trojan proxy: host={}, port={}", host, port_u16);
-        Ok((host.to_string(), port_u16))
+        Ok(())
     }
 }

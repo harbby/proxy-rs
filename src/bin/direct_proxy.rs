@@ -1,23 +1,15 @@
-
+use std::fmt::format;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use tokio::io;
 use tracing as LOG;
 use proxy_rs::socks5_helper;
 
 async fn transfer(mut inbound: TcpStream, addr: &str) -> Result<()> {
-    let mut outbound = match TcpStream::connect(addr).await {
-        Ok(s) => {
-            LOG::info!("Connected to outbound {}", addr);
-            s
-        }
-        Err(e) => {
-            LOG::error!("Failed to connect to outbound {}: {}", addr, e);
-            return Err(e.into());
-        }
-    };
+    let mut outbound = TcpStream::connect(addr).await
+        .context(format!("failed to connect to {}", addr))?;
 
     io::copy_bidirectional(&mut inbound, &mut outbound).await?;
     // let (mut ri, mut wi) = inbound.into_split();
@@ -34,8 +26,15 @@ async fn transfer(mut inbound: TcpStream, addr: &str) -> Result<()> {
     Ok(())
 }
 
-async fn handle_client(stream: TcpStream) -> Result<()> {
-    let (inbound, target, prot) = socks5_helper::handle_socks5(stream).await?;
+async fn handle_client(mut stream: TcpStream) -> Result<()> {
+    // ========== Handshake Phase ==========
+    let mut buf = [0u8; 2];
+    let n = stream.read(&mut buf).await?;
+    if n < 2 || buf[0] != 0x05 {
+        // anyhow::bail!("Not a SOCKS5 request");
+        return Ok(())
+    }
+    let (inbound, target, prot) = socks5_helper::handle_socks5(stream, buf[1]).await?;
     transfer(inbound, format!("{}:{}", &target, prot).as_str()).await
 }
 
