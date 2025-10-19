@@ -79,7 +79,11 @@ async fn transfer(
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    let is_windows = cfg!(target_os = "windows");
+    tracing_subscriber::fmt()
+        .with_ansi(!is_windows)
+        .init();
+
     let socks_addr = settings::get_config().socks_bind.as_str();
     let http_addr = settings::get_config().http_bind.as_str();
 
