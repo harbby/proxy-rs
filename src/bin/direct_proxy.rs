@@ -1,5 +1,3 @@
-use std::fmt::format;
-use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use anyhow::{Context, Result};
@@ -48,7 +46,7 @@ async fn main() -> Result<()> {
     let listener = TcpListener::bind("127.0.0.1:8888").await?;
     LOG::info!("Listening proxying on 127.0.0.1:8888");
     loop {
-        let (inbound, addr) = listener.accept().await?;
+        let (inbound, _addr) = listener.accept().await?;
         // LOG::info!("New client from {}", addr);
 
         tokio::spawn(async move {

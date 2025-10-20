@@ -30,8 +30,8 @@ pub async fn handle_socks5(mut inbound: TcpStream, nmethods: u8) -> anyhow::Resu
         return Err(anyhow::anyhow!("Only CONNECT is supported"));
     }
     let atyp = buf[3];
-    let mut addr = String::new();
-    let mut port: u16 = 0;
+    let addr: String;
+    let port: u16;
     LOG::debug!("SOCKS5 received SOCKS5 request");
 
     match atyp {

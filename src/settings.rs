@@ -15,10 +15,17 @@ pub struct CoreConfig {
     pub socks_bind: String,
     pub http_bind: String,
     pub select: Vec<u16>,
-    pub special_domains: HashMap<String, u16>,
-    pub default_backend: u16,
-    #[serde(default = "default_vec_str")]
-    pub no_proxy: Vec<String>,
+    #[serde(default = "default_vec_rule")]
+    pub rule: Vec<Rule>,
+    #[serde(default = "default_direct")]
+    pub direct: HashMap<String, Vec<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Rule {
+    pub select: u16,
+    #[serde(flatten)]
+    pub other: HashMap<String, Vec<String>>,
 }
 
 static SERVER_LIST_CONFIG: LazyLock<Config> = LazyLock::new(|| {
@@ -41,16 +48,27 @@ static CORE_CONFIG: LazyLock<CoreConfig> = LazyLock::new(|| {
         if conf.index != *index {
             anyhow::anyhow!("server index check failed");
         }
-        LOG::info!("** Usage trojan server[{}] {} **", *index, conf.name);
+        LOG::info!("** Usage trojan [{}] {} **", *index, conf.name);
+    }
+    for rule in &config.rule {
+        for (k, v) in rule.other.iter() {
+            let index = rule.select;
+            let conf = *&SERVER_LIST_CONFIG
+                .list
+                .get(index as usize - 1)
+                .ok_or_else(|| anyhow::anyhow!("Index {} out of bounds", index))
+                .expect("index out of bounds");
+
+            let name = k;
+            LOG::info!("[{}] usage[{}] {}", k, index, conf.name);
+        }
     }
     config
 });
 
 #[derive(Debug, Deserialize)]
-struct Config {
+pub struct Config {
     pub list: Vec<ServerInfo>,
-    #[serde(default = "default_scheme")]
-    pub subscription: String,
     #[serde(default = "default_scheme")]
     pub update_time: String,
 }
@@ -71,11 +89,15 @@ pub struct ServerInfo {
 
 // Custom default value function
 fn default_scheme() -> String {
-    "".to_string()
+    String::new()
 }
 
-fn default_vec_str() -> Vec<String> {
-    Vec::with_capacity(0)
+fn default_direct() -> HashMap<String, Vec<String>> {
+    HashMap::new()
+}
+
+fn default_vec_rule() -> Vec<Rule> {
+    Vec::new()
 }
 
 pub fn load_json<T: DeserializeOwned>(path: &str) -> Result<T> {
@@ -90,21 +112,6 @@ pub fn get_config() -> &'static CoreConfig {
     &CORE_CONFIG
 }
 
-fn select_index(target_addr: &str) -> u16 {
-    let config = get_config();
-    let index = config.special_domains
-        .iter()
-        .find(|(domain, _)| target_addr.ends_with(*domain))
-        .map(|(_, idx)| *idx)
-        .unwrap_or(config.default_backend);
-    *config.select.get(index as usize).expect("")
-}
-
-pub fn get_trojan_server(target_addr: &str) -> Result<&'static ServerInfo> {
-    let index: u16 = select_index(target_addr);
-    let info = &*SERVER_LIST_CONFIG
-        .list
-        .get(index as usize - 1)
-        .ok_or_else(|| anyhow::anyhow!("Index {} out of bounds", index))?;
-    Ok(info)
+pub fn get_server_list() -> &'static Config {
+    &SERVER_LIST_CONFIG
 }

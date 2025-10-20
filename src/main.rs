@@ -1,12 +1,11 @@
 use anyhow::{Context, Result};
 use proxy_rs::settings::ServerInfo;
 use proxy_rs::trojan_util::TrojanUtil;
-use proxy_rs::{http_helper, settings, socks5_helper};
+use proxy_rs::{http_helper, router, settings, socks5_helper};
 use tokio::io;
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
 use tracing as LOG;
-use proxy_rs::router::is_no_proxy;
 
 async fn handle_http(inbound: TcpStream) -> Result<()> {
     let mut buf = [0u8; 1];
@@ -40,49 +39,58 @@ async fn handle_socks(mut client_stream: TcpStream) -> Result<()> {
 
 async fn transfer(
     mut inbound: TcpStream,
-    target_addr: &str,
+    addr: &str,
     port: u16,
     mode: &str,
 ) -> Result<()> {
     let mut proxy_mode = "proxy";
-    let (from_client, from_server) = if is_no_proxy(target_addr) {
+    let (is_direct, label) = router::is_direct(addr);
+    let (from_client, from_server) = if is_direct {
         proxy_mode = "direct";
-        let mut outbound = TcpStream::connect(format!("{target_addr}:{port}")).await
-            .context(format!("Failed accepted tcp:{target_addr}:{port} [{mode} > {proxy_mode}]"))?;
+        let mut outbound = TcpStream::connect(format!("{addr}:{port}")).await
+            .context(format!("Failed accepted tcp:{addr}:{port} [{mode} > {proxy_mode}]"))?;
+
+        LOG::info!("accepted tcp:{addr}:{port} [{mode} > {proxy_mode}][{label}]");
         io::copy_bidirectional(&mut inbound, &mut outbound).await?
     } else {
-        let info: &ServerInfo = settings::get_trojan_server(target_addr)?;
+        let info: &ServerInfo = router::get_trojan_server(addr);
         let mut tls = TrojanUtil::create_connection(info).await
-            .context(format!("Failed accepted trojan server [{}]{}", info.index, info.name))?;
+            .context(format!("connect failed, trojan server [{}]{}", info.index, info.name))?;
 
         // 1. Connect to the Trojan server
-        TrojanUtil::send_trojan_request(info.key.as_str(), &mut tls, target_addr, port).await?;
+        TrojanUtil::send_trojan_request(info.key.as_str(), &mut tls, addr, port).await
+            .context(format!("accepted failed, trojan server [{}]{}", info.index, info.name))?;
+
+        LOG::info!("accepted tcp:{addr}:{port} [{mode} > {proxy_mode}][{}]", info.index);
 
         // 2. Bidirectional data forwarding
         io::copy_bidirectional(&mut inbound, &mut tls)
             .await
-            .context(format!(
-                "trojan transfer failed, tcp:{}:{} [{mode} > {proxy_mode}]",
-                target_addr, port
-            ))?
+            .context(format!("transfer failed, tcp:{addr}:{port} [{mode} > {proxy_mode}[{}]]", info.index))?
     };
 
-    LOG::info!(
-        "accepted tcp:{}:{} [{mode} > {proxy_mode}], uplink:{} downlink:{} bytes",
-        target_addr,
-        port,
-        from_client,
-        from_server
-    );
+    LOG::debug!("succeed tcp:{addr}:{port} [{mode} > {proxy_mode}], uplink:{from_client} downlink:{from_server} bytes");
     Ok(())
+}
+
+fn init_logger() {
+    use time::macros::{format_description, offset};
+    use tracing_subscriber::fmt::time::OffsetTime;
+
+    // "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:3]"
+    let time_fmt = format_description!("[hour]:[minute]:[second].[subsecond digits:3]");
+    let timer = OffsetTime::new(offset!(+8), time_fmt);
+
+    //let is_windows = cfg!(target_os = "windows");
+    tracing_subscriber::fmt()
+        .with_timer(timer)
+        //.with_ansi(!is_windows)
+        .init();
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let is_windows = cfg!(target_os = "windows");
-    tracing_subscriber::fmt()
-        .with_ansi(!is_windows)
-        .init();
+    init_logger();
 
     let socks_addr = settings::get_config().socks_bind.as_str();
     let http_addr = settings::get_config().http_bind.as_str();
