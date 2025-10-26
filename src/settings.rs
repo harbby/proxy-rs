@@ -23,7 +23,7 @@ pub struct CoreConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct Rule {
-    pub select: u16,
+    pub select: Vec<u16>,
     #[serde(flatten)]
     pub other: HashMap<String, Vec<String>>,
 }
@@ -35,8 +35,7 @@ static SERVER_LIST_CONFIG: LazyLock<Config> = LazyLock::new(|| {
 
 static CORE_CONFIG: LazyLock<CoreConfig> = LazyLock::new(|| {
     let config:CoreConfig = load_json(CORE_CONFIG_FILE).expect("failed to load config");
-    // check
-    for index in &config.select {
+    let check_select = |index: &u16| {
         let conf = *&SERVER_LIST_CONFIG
             .list
             .get(*index as usize - 1)
@@ -48,19 +47,19 @@ static CORE_CONFIG: LazyLock<CoreConfig> = LazyLock::new(|| {
         if conf.index != *index {
             anyhow::anyhow!("server index check failed");
         }
-        LOG::info!("** Usage trojan [{}] {} **", *index, conf.name);
-    }
-    for rule in &config.rule {
-        for (k, v) in rule.other.iter() {
-            let index = rule.select;
-            let conf = *&SERVER_LIST_CONFIG
-                .list
-                .get(index as usize - 1)
-                .ok_or_else(|| anyhow::anyhow!("Index {} out of bounds", index))
-                .expect("index out of bounds");
+        LOG::info!("** Usage [{}] {}", *index, conf.name);
+        return conf;
+    };
+    // check
+    config.select.iter().for_each(|i| {check_select(i);});
 
-            let name = k;
-            LOG::info!("[{}] usage[{}] {}", k, index, conf.name);
+    for rule in &config.rule {
+        for index in &rule.select {
+            let conf = check_select(index);
+            for (k, v) in rule.other.iter() {
+                let name = k;
+                LOG::info!("[{}] usage[{}] {}", k, index, conf.name);
+            }
         }
     }
     config

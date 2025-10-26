@@ -45,15 +45,18 @@ async fn transfer(
 ) -> Result<()> {
     let mut proxy_mode = "proxy";
     let (is_direct, label) = router::is_direct(addr);
-    let (from_client, from_server) = if is_direct {
+    if is_direct {
         proxy_mode = "direct";
         let mut outbound = TcpStream::connect(format!("{addr}:{port}")).await
             .context(format!("Failed accepted tcp:{addr}:{port} [{mode} > {proxy_mode}]"))?;
 
         LOG::info!("accepted tcp:{addr}:{port} [{mode} > {proxy_mode}][{label}]");
-        io::copy_bidirectional(&mut inbound, &mut outbound).await?
+        if let Ok((up, down)) = io::copy_bidirectional(&mut inbound, &mut outbound).await {
+            LOG::debug!("succeed tcp:{addr}:{port} [{mode} > {proxy_mode}], up:{up} down:{down} bytes");
+        }
     } else {
-        let info: &ServerInfo = router::get_trojan_server(addr);
+        let router = router::get_or_router();
+        let info: &ServerInfo = router.get_server(addr);
         let mut tls = TrojanUtil::create_connection(info).await
             .context(format!("connect failed, trojan server [{}]{}", info.index, info.name))?;
 
@@ -62,14 +65,12 @@ async fn transfer(
             .context(format!("accepted failed, trojan server [{}]{}", info.index, info.name))?;
 
         LOG::info!("accepted tcp:{addr}:{port} [{mode} > {proxy_mode}][{}]", info.index);
-
         // 2. Bidirectional data forwarding
-        io::copy_bidirectional(&mut inbound, &mut tls)
-            .await
-            .context(format!("transfer failed, tcp:{addr}:{port} [{mode} > {proxy_mode}[{}]]", info.index))?
+        if let Ok((up, down)) = io::copy_bidirectional(&mut inbound, &mut tls).await {
+            LOG::debug!("succeed tcp:{addr}:{port} [{mode} > {proxy_mode}], up:{up} down:{down} bytes");
+        }
     };
 
-    LOG::debug!("succeed tcp:{addr}:{port} [{mode} > {proxy_mode}], uplink:{from_client} downlink:{from_server} bytes");
     Ok(())
 }
 

@@ -1,6 +1,7 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 use tokio_native_tls::TlsStream;
 use tokio::net::TcpStream;
+use tokio::time::{timeout, Duration};
 use tracing as LOG;
 use tokio_native_tls::TlsConnector;
 use native_tls::TlsConnector as NativeTlsConnector;
@@ -71,7 +72,7 @@ impl TrojanUtil {
 
     pub async fn create_connection(conf: &ServerInfo) -> Result<TlsStream<TcpStream>> {
         let trojan_addr = format!("{}:{}", conf.host, conf.port);
-        let tcp = TcpStream::connect(trojan_addr).await?;
+        let tcp = timeout(Duration::from_secs(3), TcpStream::connect(trojan_addr)).await??;
         let connector = NativeTlsConnector::builder().build()?;
         let connector = TlsConnector::from(connector);
         let tls = connector.connect(conf.sni.as_str(), tcp).await?;

@@ -9,7 +9,7 @@ name = "mini_tcp_proxy"
 name = "direct_proxy"
 
 [dependencies]
-tokio = { version = "1.48.0", features = ["rt", "net", "rt-multi-thread", "macros", "sync", "io-util"] }
+tokio = { version = "1.48.0", features = ["rt", "net", "rt-multi-thread", "macros", "sync", "io-util", "time"] }
 tracing = "0.1.41"
 tracing-subscriber = {version = "0.3.20", features = ["time"]}
 time = { version = "0.3", features = ["macros"] }
