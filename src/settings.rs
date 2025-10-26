@@ -47,11 +47,13 @@ static CORE_CONFIG: LazyLock<CoreConfig> = LazyLock::new(|| {
         if conf.index != *index {
             anyhow::anyhow!("server index check failed");
         }
-        LOG::info!("** Usage [{}] {}", *index, conf.name);
         return conf;
     };
     // check
-    config.select.iter().for_each(|i| {check_select(i);});
+    config.select.iter().for_each(|index| {
+        let conf = check_select(index);
+        LOG::info!("** Usage [{}] {}", *index, conf.name);
+    });
 
     for rule in &config.rule {
         for index in &rule.select {

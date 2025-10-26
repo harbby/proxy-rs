@@ -72,7 +72,7 @@ impl TrojanUtil {
 
     pub async fn create_connection(conf: &ServerInfo) -> Result<TlsStream<TcpStream>> {
         let trojan_addr = format!("{}:{}", conf.host, conf.port);
-        let tcp = timeout(Duration::from_secs(3), TcpStream::connect(trojan_addr)).await??;
+        let tcp = timeout(Duration::from_secs(5), TcpStream::connect(trojan_addr)).await??;
         let connector = NativeTlsConnector::builder().build()?;
         let connector = TlsConnector::from(connector);
         let tls = connector.connect(conf.sni.as_str(), tcp).await?;
