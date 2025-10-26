@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use time::OffsetDateTime;
 use proxy_rs::settings::ServerInfo;
 use proxy_rs::trojan_util::TrojanUtil;
 use proxy_rs::{http_helper, router, settings, socks5_helper};
@@ -7,7 +6,6 @@ use tokio::io;
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
 use tracing as LOG;
-use tracing_subscriber::fmt::time::OffsetTime;
 
 async fn handle_http(inbound: TcpStream) -> Result<()> {
     let mut buf = [0u8; 1];
@@ -77,18 +75,13 @@ async fn transfer(
 }
 
 fn init_logger() {
-    use time::macros::{format_description, offset};
-    use tracing_subscriber::fmt::time::{OffsetTime};
-    use time::UtcOffset;
-
-    // "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:3]"
-    let time_fmt = format_description!("[hour]:[minute]:[second].[subsecond digits:3]");
-    let offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
-    let timer = OffsetTime::new(offset, time_fmt);
-
+    use tracing_subscriber::fmt::time::{ChronoLocal};
+    let timer = ChronoLocal::new("%H:%M:%S%.3f".to_string());
     //let is_windows = cfg!(target_os = "windows");
     tracing_subscriber::fmt()
         .with_timer(timer)
+        .with_level(true)
+        .with_target(true)
         //.with_ansi(!is_windows)
         .init();
 }
