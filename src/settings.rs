@@ -1,5 +1,6 @@
 use std::cmp::PartialEq;
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::fs::File;
@@ -48,6 +49,15 @@ impl Default for DefaultMode {
     }
 }
 
+impl Display for DefaultMode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DefaultMode::Proxy => {f.write_str("proxy")},
+            DefaultMode::Direct => {f.write_str("direct")},
+        }
+    }
+}
+
 static SERVER_LIST_CONFIG: LazyLock<Config> = LazyLock::new(|| {
     let config:Config = load_json(SERVER_LIST_FILE).expect("failed to load config");
     config
@@ -55,6 +65,8 @@ static SERVER_LIST_CONFIG: LazyLock<Config> = LazyLock::new(|| {
 
 static CORE_CONFIG: LazyLock<CoreConfig> = LazyLock::new(|| {
     let config:CoreConfig = load_toml(CORE_CONFIG_FILE).expect("failed to load config");
+    LOG::info!("** Default working mode: {}.", config.default);
+
     let check_select = |index: &u16| {
         let conf = *&SERVER_LIST_CONFIG
             .list
