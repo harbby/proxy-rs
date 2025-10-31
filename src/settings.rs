@@ -14,7 +14,7 @@ static CORE_CONFIG_FILE:&str = "config.toml";
 
 // Custom default value function
 fn default_direct() -> HashMap<String, Vec<String>> { HashMap::new() }
-
+fn default_tcp_connect_timeout_ms() -> u16 { 5000 }
 #[derive(Debug, Deserialize)]
 pub struct CoreConfig {
     pub socks_bind: String,
@@ -27,6 +27,8 @@ pub struct CoreConfig {
     pub proxy: Vec<Rule>,
     #[serde(default = "default_direct")]
     pub direct: HashMap<String, Vec<String>>,
+    #[serde(default = "default_tcp_connect_timeout_ms")]
+    pub tcp_connect_timeout_ms: u16,
 }
 
 #[derive(Debug, Deserialize)]
@@ -147,4 +149,8 @@ pub fn get_server_list() -> &'static Config {
 
 pub fn is_mode_default_proxy() -> bool {
     get_config().default == DefaultMode::Proxy
+}
+
+pub fn tcp_connect_timeout_ms() -> u64 {
+    get_config().tcp_connect_timeout_ms as u64
 }

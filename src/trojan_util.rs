@@ -8,6 +8,7 @@ use native_tls::TlsConnector as NativeTlsConnector;
 use tokio::io::AsyncWriteExt;
 use anyhow::Result;
 use sha2::{Sha224, Digest};
+use crate::settings;
 use crate::settings::{ServerInfo};
 
 /// Trojan Protocol:
@@ -72,7 +73,8 @@ impl TrojanUtil {
 
     pub async fn create_connection(conf: &ServerInfo) -> Result<TlsStream<TcpStream>> {
         let trojan_addr = format!("{}:{}", conf.host, conf.port);
-        let tcp = timeout(Duration::from_secs(5), TcpStream::connect(trojan_addr)).await??;
+        let d = Duration::from_millis(settings::tcp_connect_timeout_ms());
+        let tcp = timeout(d, TcpStream::connect(trojan_addr)).await??;
         let connector = NativeTlsConnector::builder().build()?;
         let connector = TlsConnector::from(connector);
         let tls = connector.connect(conf.sni.as_str(), tcp).await?;

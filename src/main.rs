@@ -1,3 +1,4 @@
+use std::time::Duration;
 use anyhow::{Context, Result};
 use rsfly::trojan_util::TrojanUtil;
 use rsfly::{http_helper, router, settings, socks5_helper};
@@ -5,6 +6,7 @@ use tokio::io;
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
 use log as LOG;
+use tokio::time::timeout;
 
 async fn handle_http(inbound: TcpStream) -> Result<()> {
     let mut buf = [0u8; 1];
@@ -45,9 +47,10 @@ async fn transfer(
     let (label, option) = router::Router::get_factory().do_route(addr);
     match option {
         None => {
-            let mut outbound = TcpStream::connect(format!("{addr}:{port}")).await
-                .context(format!("Failed accepted tcp:{addr}:{port} [{mode} > direct]"))?;
-
+            let d = Duration::from_millis(settings::tcp_connect_timeout_ms());
+            let mut outbound = timeout(d, TcpStream::connect(format!("{addr}:{port}"))).await
+                .context(format!("Failed accepted tcp:{addr}:{port} [{mode} > direct]"))
+                ??;
             LOG::info!("accepted tcp:{addr}:{port} [{mode} > direct][{label}]");
             if let Ok((up, down)) = io::copy_bidirectional(&mut inbound, &mut outbound).await {
                 LOG::debug!("succeed tcp:{addr}:{port} [{mode} > direct], up:{up} down:{down} bytes");
