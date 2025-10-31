@@ -2,7 +2,7 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::io::Result;
 use tokio::io;
-use tracing as LOG;
+use log as LOG;
 
 async fn transfer(mut inbound: TcpStream, addr: &str) -> Result<()> {
     let local_addr = inbound.peer_addr()?;
@@ -61,7 +61,7 @@ async fn transfer(mut inbound: TcpStream, addr: &str) -> Result<()> {
 ///  Essentially, this is a simple port forwarding proxy.
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    env_logger::init();
 
     let listener = TcpListener::bind("127.0.0.1:15432").await?;
     LOG::info!("Listening proxying on 127.0.0.1:15432");
@@ -69,8 +69,7 @@ async fn main() -> Result<()> {
         let (inbound, _) = listener.accept().await?;
         tokio::spawn(async move {
             if let Err(e) = transfer(inbound, "127.0.0.1:5432").await {
-                //tracing::error!("Transfer error: {:?}", e);
-                tracing::error!("Transfer error: {:?}", e);
+                LOG::error!("Transfer error: {:?}", e);
             }
         });
     }

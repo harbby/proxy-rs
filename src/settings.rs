@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::{BufReader, Read};
 use std::sync::{LazyLock};
 use anyhow::{Result};
-use tracing as LOG;
+use log as LOG;
 
 static SERVER_LIST_FILE:&str = "trojan_servers.json";
 static CORE_CONFIG_FILE:&str = "config.toml";

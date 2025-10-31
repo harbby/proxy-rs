@@ -2,7 +2,7 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use tokio_native_tls::TlsStream;
 use tokio::net::TcpStream;
 use tokio::time::{timeout, Duration};
-use tracing as LOG;
+use log as LOG;
 use tokio_native_tls::TlsConnector;
 use native_tls::TlsConnector as NativeTlsConnector;
 use tokio::io::AsyncWriteExt;
@@ -43,7 +43,7 @@ pub async fn is_tls_alive(tls: &mut TlsStream<TcpStream>) -> bool {
     match tls.write(&[]).await {
         Ok(_) => true,
         Err(e) => {
-            tracing::warn!("TLS connection dead: {}", e);
+            LOG::warn!("TLS connection dead: {}", e);
             false
         }
     }

@@ -1,4 +1,4 @@
-use crate::{router, settings};
+use crate::settings;
 use crate::settings::{ServerInfo};
 
 fn is_match(rule: &str, target_addr: &str) -> bool {

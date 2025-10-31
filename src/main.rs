@@ -4,7 +4,7 @@ use rsfly::{http_helper, router, settings, socks5_helper};
 use tokio::io;
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
-use tracing as LOG;
+use log as LOG;
 
 async fn handle_http(inbound: TcpStream) -> Result<()> {
     let mut buf = [0u8; 1];
@@ -42,20 +42,20 @@ async fn transfer(
     port: u16,
     mode: &str,
 ) -> Result<()> {
-    let mut proxy_mode = "proxy";
     let (label, option) = router::Router::get_factory().do_route(addr);
     match option {
         None => {
-            proxy_mode = "direct";
             let mut outbound = TcpStream::connect(format!("{addr}:{port}")).await
-                .context(format!("Failed accepted tcp:{addr}:{port} [{mode} > {proxy_mode}]"))?;
+                .context(format!("Failed accepted tcp:{addr}:{port} [{mode} > direct]"))?;
 
-            LOG::info!("accepted tcp:{addr}:{port} [{mode} > {proxy_mode}][{label}]");
+            LOG::info!("accepted tcp:{addr}:{port} [{mode} > direct][{label}]");
             if let Ok((up, down)) = io::copy_bidirectional(&mut inbound, &mut outbound).await {
-                LOG::debug!("succeed tcp:{addr}:{port} [{mode} > {proxy_mode}], up:{up} down:{down} bytes");
+                LOG::debug!("succeed tcp:{addr}:{port} [{mode} > direct], up:{up} down:{down} bytes");
             }
         }
         Some(info) => {
+            use rsfly::color::Colorize;
+            let proxy_mode = format!("{mode} > proxy").yellow();
             let mut tls = TrojanUtil::create_connection(info).await
                 .context(format!("connect failed, trojan server [{}]{}", info.index, info.name))?;
 
@@ -63,10 +63,10 @@ async fn transfer(
             TrojanUtil::send_trojan_request(info.key.as_str(), &mut tls, addr, port).await
                 .context(format!("accepted failed, trojan server [{}]{}", info.index, info.name))?;
 
-            LOG::info!("accepted tcp:{addr}:{port} [{mode} > {proxy_mode}][{}]", info.index);
+            LOG::info!("accepted tcp:{addr}:{port} [{proxy_mode}][{}]", info.index);
             // 2. Bidirectional data forwarding
             if let Ok((up, down)) = io::copy_bidirectional(&mut inbound, &mut tls).await {
-                LOG::debug!("succeed tcp:{addr}:{port} [{mode} > {proxy_mode}], up:{up} down:{down} bytes");
+                LOG::debug!("succeed tcp:{addr}:{port} [{proxy_mode}], up:{up} down:{down} bytes");
             }
         }
     }
@@ -75,14 +75,28 @@ async fn transfer(
 }
 
 fn init_logger() {
-    use tracing_subscriber::fmt::time::{ChronoLocal};
-    let timer = ChronoLocal::new("%H:%M:%S%.3f".to_string());
-    //let is_windows = cfg!(target_os = "windows");
-    tracing_subscriber::fmt()
-        .with_timer(timer)
-        .with_level(true)
-        .with_target(true)
-        //.with_ansi(!is_windows)
+    use chrono::Local;
+    env_logger::builder()
+        .filter_level(log::LevelFilter::Info)
+        .format(|buf, record| {
+            let now = Local::now().format("%H:%M:%S%.3f%:z");
+            let level_style = buf.default_level_style(record.level());
+            let mut level_bytes = Vec::new();
+            level_style.write_to(&mut level_bytes).unwrap();
+            use std::io::Write;
+            std::io::Write::write_all(&mut level_bytes, record.level().as_str().as_bytes()).unwrap();
+            level_style.write_reset_to(&mut level_bytes).unwrap(); // close ansi
+            let level_str = String::from_utf8(level_bytes).unwrap();
+
+            writeln!(
+                buf,
+                "[{} {:<5} {}] {}",
+                now,
+                level_str,
+                record.target(),
+                record.args()
+            )
+        })
         .init();
 }
 

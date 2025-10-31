@@ -1,6 +1,6 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream};
-use tracing as LOG;
+use log as LOG;
 
 pub async fn handle_socks5(mut inbound: TcpStream, nmethods: u8) -> anyhow::Result<(TcpStream, String, u16)> {
     // let mut buf = [0u8; 2];

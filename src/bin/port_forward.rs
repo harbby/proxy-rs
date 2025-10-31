@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::io::Result;
 use tokio::io;
-use tracing as LOG;
+use log as LOG;
 
 async fn transfer(mut inbound: TcpStream, addr: SocketAddr, target: String) {
     let local_port = addr.port();
@@ -53,7 +53,7 @@ async fn bind(port: &str, target: &str) -> Result<impl Future<Output = ()> + use
 ///  Essentially, this is a simple port forwarding proxy.
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
+    env_logger::init();
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.is_empty() {
         LOG::error!("Usage: tcp_proxy <local_port>=<target> [<local_port>=<target> ...]");
