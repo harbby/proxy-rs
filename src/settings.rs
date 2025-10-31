@@ -42,10 +42,10 @@ static CORE_CONFIG: LazyLock<CoreConfig> = LazyLock::new(|| {
             .ok_or_else(|| anyhow::anyhow!("Index {} out of bounds", *index))
             .expect("index out of bounds");
         if !conf.scheme.eq_ignore_ascii_case("trojan") {
-            anyhow::anyhow!("server index check failed");
+            let _ = anyhow::anyhow!("server index check failed");
         }
         if conf.index != *index {
-            anyhow::anyhow!("server index check failed");
+            let _ = anyhow::anyhow!("server index check failed");
         }
         return conf;
     };
@@ -58,8 +58,7 @@ static CORE_CONFIG: LazyLock<CoreConfig> = LazyLock::new(|| {
     for rule in &config.rule {
         for index in &rule.select {
             let conf = check_select(index);
-            for (k, v) in rule.other.iter() {
-                let name = k;
+            for (k, _v) in rule.other.iter() {
                 LOG::info!("[{}] usage[{}] {}", k, index, conf.name);
             }
         }

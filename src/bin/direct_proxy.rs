@@ -3,7 +3,7 @@ use tokio::net::{TcpListener, TcpStream};
 use anyhow::{Context, Result};
 use tokio::io;
 use tracing as LOG;
-use proxy_rs::socks5_helper;
+use rsfly::socks5_helper;
 
 async fn transfer(mut inbound: TcpStream, addr: &str) -> Result<()> {
     let mut outbound = TcpStream::connect(addr).await

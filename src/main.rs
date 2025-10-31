@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
-use proxy_rs::settings::ServerInfo;
-use proxy_rs::trojan_util::TrojanUtil;
-use proxy_rs::{http_helper, router, settings, socks5_helper};
+use rsfly::settings::ServerInfo;
+use rsfly::trojan_util::TrojanUtil;
+use rsfly::{http_helper, router, settings, socks5_helper};
 use tokio::io;
 use tokio::io::AsyncReadExt;
 use tokio::net::{TcpListener, TcpStream};
