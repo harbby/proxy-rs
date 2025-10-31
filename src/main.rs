@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use rsfly::settings::ServerInfo;
 use rsfly::trojan_util::TrojanUtil;
 use rsfly::{http_helper, router, settings, socks5_helper};
 use tokio::io;
@@ -44,32 +43,33 @@ async fn transfer(
     mode: &str,
 ) -> Result<()> {
     let mut proxy_mode = "proxy";
-    let (is_direct, label) = router::is_direct(addr);
-    if is_direct {
-        proxy_mode = "direct";
-        let mut outbound = TcpStream::connect(format!("{addr}:{port}")).await
-            .context(format!("Failed accepted tcp:{addr}:{port} [{mode} > {proxy_mode}]"))?;
+    let (label, option) = router::Router::get_factory().do_route(addr);
+    match option {
+        None => {
+            proxy_mode = "direct";
+            let mut outbound = TcpStream::connect(format!("{addr}:{port}")).await
+                .context(format!("Failed accepted tcp:{addr}:{port} [{mode} > {proxy_mode}]"))?;
 
-        LOG::info!("accepted tcp:{addr}:{port} [{mode} > {proxy_mode}][{label}]");
-        if let Ok((up, down)) = io::copy_bidirectional(&mut inbound, &mut outbound).await {
-            LOG::debug!("succeed tcp:{addr}:{port} [{mode} > {proxy_mode}], up:{up} down:{down} bytes");
+            LOG::info!("accepted tcp:{addr}:{port} [{mode} > {proxy_mode}][{label}]");
+            if let Ok((up, down)) = io::copy_bidirectional(&mut inbound, &mut outbound).await {
+                LOG::debug!("succeed tcp:{addr}:{port} [{mode} > {proxy_mode}], up:{up} down:{down} bytes");
+            }
         }
-    } else {
-        let router = router::get_or_router();
-        let info: &ServerInfo = router.get_server(addr);
-        let mut tls = TrojanUtil::create_connection(info).await
-            .context(format!("connect failed, trojan server [{}]{}", info.index, info.name))?;
+        Some(info) => {
+            let mut tls = TrojanUtil::create_connection(info).await
+                .context(format!("connect failed, trojan server [{}]{}", info.index, info.name))?;
 
-        // 1. Connect to the Trojan server
-        TrojanUtil::send_trojan_request(info.key.as_str(), &mut tls, addr, port).await
-            .context(format!("accepted failed, trojan server [{}]{}", info.index, info.name))?;
+            // 1. Connect to the Trojan server
+            TrojanUtil::send_trojan_request(info.key.as_str(), &mut tls, addr, port).await
+                .context(format!("accepted failed, trojan server [{}]{}", info.index, info.name))?;
 
-        LOG::info!("accepted tcp:{addr}:{port} [{mode} > {proxy_mode}][{}]", info.index);
-        // 2. Bidirectional data forwarding
-        if let Ok((up, down)) = io::copy_bidirectional(&mut inbound, &mut tls).await {
-            LOG::debug!("succeed tcp:{addr}:{port} [{mode} > {proxy_mode}], up:{up} down:{down} bytes");
+            LOG::info!("accepted tcp:{addr}:{port} [{mode} > {proxy_mode}][{}]", info.index);
+            // 2. Bidirectional data forwarding
+            if let Ok((up, down)) = io::copy_bidirectional(&mut inbound, &mut tls).await {
+                LOG::debug!("succeed tcp:{addr}:{port} [{mode} > {proxy_mode}], up:{up} down:{down} bytes");
+            }
         }
-    };
+    }
 
     Ok(())
 }
