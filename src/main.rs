@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::time::Duration;
 use anyhow::{Context, Result};
 use rsfly::trojan_util::TrojanUtil;
@@ -103,6 +104,37 @@ fn init_logger() {
         .init();
 }
 
+async fn start_listener<F, Fut, E>(
+    addr: &'static str,
+    protocol_name: &str,
+    handler: F,
+) -> io::Result<tokio::task::JoinHandle<()>>
+where
+    F: Fn(TcpStream) -> Fut + Send + 'static + Copy, // Copy 保证 handler 可以被循环使用
+    Fut: Future<Output = Result<(), E>> + Send + 'static, //  handler 返回的 Future
+    E: Display + Send + 'static, // 错误类型，只需要能被打印
+{
+    let listener = TcpListener::bind(addr).await?;
+    LOG::info!("Listening {} on {}", protocol_name, addr);
+
+    let handle = tokio::spawn(async move {
+        loop {
+            match listener.accept().await {
+                Ok((inbound, _)) => {
+                    tokio::spawn(async move {
+                        if let Err(e) = handler(inbound).await {
+                            LOG::error!("{}", e);
+                        }
+                    });
+                }
+                Err(e) => { LOG::error!("Accept error on {}: {}", addr, e); }
+            }
+        }
+    });
+
+    Ok(handle)
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     init_logger();
@@ -110,39 +142,8 @@ async fn main() -> Result<()> {
     let socks_addr = settings::get_config().socks_bind.as_str();
     let http_addr = settings::get_config().http_bind.as_str();
 
-    let socks_listener = TcpListener::bind(socks_addr).await?;
-    LOG::info!("Listening socks on {}", socks_addr);
-    let socks_handle = tokio::spawn(async move {
-        loop {
-            match socks_listener.accept().await {
-                Ok((inbound, _)) => {
-                    tokio::spawn(async move {
-                        if let Err(e) = handle_socks(inbound).await {
-                            LOG::error!("{}", e);
-                        }
-                    });
-                }
-                Err(e) => LOG::error!("Accept error on {}: {}", socks_addr, e),
-            }
-        }
-    });
-    //------------------------
-    let http_listener = TcpListener::bind(http_addr).await?;
-    LOG::info!("Listening http on {}", http_addr);
-    let http_handle = tokio::spawn(async move {
-        loop {
-            match http_listener.accept().await {
-                Ok((inbound, _)) => {
-                    tokio::spawn(async move {
-                        if let Err(e) = handle_http(inbound).await {
-                            LOG::error!("{}", e);
-                        }
-                    });
-                }
-                Err(e) => LOG::error!("Accept error on {}: {}", http_addr, e),
-            }
-        }
-    });
+    let socks_handle =start_listener(socks_addr, "socks", handle_socks).await?;
+    let http_handle = start_listener(http_addr, "http", handle_http).await?;
 
     let _ = tokio::try_join!(socks_handle, http_handle)?;
     println!("Shutting down...");
